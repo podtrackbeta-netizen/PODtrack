@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+import tempfile
 from email.utils import parsedate_to_datetime, parseaddr
 
 from flask import Flask, jsonify, request
@@ -32,6 +33,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CREDENTIALS_FILE = os.environ.get("GMAIL_CREDENTIALS", os.path.join(HERE, "credentials.json"))
 TOKEN_FILE = os.environ.get("GMAIL_TOKEN", os.path.join(HERE, "token.json"))
+# Where a refreshed token gets cached when TOKEN_FILE itself isn't writable —
+# e.g. a Render "Secret File" is mounted read-only. The refresh token doesn't
+# change on refresh, so re-deriving a fresh access token here each time the
+# instance restarts is harmless; it just means it isn't persisted long-term.
+TOKEN_CACHE_FILE = os.path.join(tempfile.gettempdir(), "fieldpod_gmail_token_cache.json")
 PORT = int(os.environ.get("PORT", "8000"))
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*")
 DEFAULT_QUERY = os.environ.get(
@@ -50,9 +56,12 @@ CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 
 # ─────────────────────────── auth ───────────────────────────
 def load_credentials() -> Credentials | None:
-    if not os.path.exists(TOKEN_FILE):
+    # Prefer a previously-cached refresh from this instance's writable temp
+    # dir (see _save) over the original — possibly read-only — TOKEN_FILE.
+    source = TOKEN_CACHE_FILE if os.path.exists(TOKEN_CACHE_FILE) else TOKEN_FILE
+    if not os.path.exists(source):
         return None
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+    creds = Credentials.from_authorized_user_file(source, SCOPES)
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
@@ -68,8 +77,15 @@ def load_credentials() -> Credentials | None:
 
 
 def _save(creds: Credentials) -> None:
-    with open(TOKEN_FILE, "w") as fh:
-        fh.write(creds.to_json())
+    try:
+        with open(TOKEN_FILE, "w") as fh:
+            fh.write(creds.to_json())
+    except OSError:
+        # TOKEN_FILE isn't writable (e.g. a Render Secret File, mounted
+        # read-only) — cache the refreshed token in a writable temp file
+        # instead, so this doesn't crash the process on every refresh.
+        with open(TOKEN_CACHE_FILE, "w") as fh:
+            fh.write(creds.to_json())
 
 
 def run_consent_flow() -> Credentials:
