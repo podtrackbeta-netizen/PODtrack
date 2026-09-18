@@ -39,7 +39,10 @@ TOKEN_FILE = os.environ.get("GMAIL_TOKEN", os.path.join(HERE, "token.json"))
 # instance restarts is harmless; it just means it isn't persisted long-term.
 TOKEN_CACHE_FILE = os.path.join(tempfile.gettempdir(), "fieldpod_gmail_token_cache.json")
 PORT = int(os.environ.get("PORT", "8000"))
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*")
+# Comma-separated list (e.g. "https://podtrack-limon3.pages.dev,http://localhost:5173")
+# so the deployed app and local dev testing can both call this. "*" still works as-is.
+_origins_raw = os.environ.get("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = _origins_raw if _origins_raw == "*" else [o.strip() for o in _origins_raw.split(",") if o.strip()]
 DEFAULT_QUERY = os.environ.get(
     "GMAIL_QUERY",
     '(subject:tracker OR subject:commissioning OR subject:POD OR '
