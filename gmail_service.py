@@ -247,8 +247,12 @@ def attachment(message_id: str, attachment_id: str):
 
 
 if __name__ == "__main__":
+    # 0.0.0.0 by default so this also works unmodified on a cloud host (Render,
+    # Fly, etc.) where the platform routes external traffic to that interface;
+    # override with HOST=127.0.0.1 for the old local-only behavior if you want it.
+    host = os.environ.get("HOST", "0.0.0.0")
     authed = load_credentials() is not None
-    print(f"FieldPOD Gmail service on http://127.0.0.1:{PORT}  (authenticated: {authed})")
+    print(f"FieldPOD Gmail service on http://{host}:{PORT}  (authenticated: {authed})")
     if not authed:
         print("  Not connected yet — POST /api/auth/login, or run:  python server/connect.py")
-    app.run(host="127.0.0.1", port=PORT, threaded=True)
+    app.run(host=host, port=PORT, threaded=True)
