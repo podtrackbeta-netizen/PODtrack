@@ -257,6 +257,8 @@ def attachment(message_id: str, attachment_id: str):
             .execute()
         )
         raw = _b64(att["data"])
+        if name.lower().endswith(".pdf"):
+            return jsonify(ok=True, name=name, bytes=len(raw), base64=base64.b64encode(raw).decode("ascii"))
         text = attachment_to_text(name, raw)
         return jsonify(ok=True, name=name, bytes=len(raw), text=text)
     except ValueError as e:
